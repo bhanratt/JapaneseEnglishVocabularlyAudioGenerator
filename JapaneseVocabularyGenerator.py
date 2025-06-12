@@ -1,14 +1,17 @@
 import csv
-from gtts import gTTS
-from pydub import AudioSegment
 import os
-
-# Renshuu export format. You will probably want to clean up the DEF field manually to be more concise otherwise the English description is very long
-#"[KANA]"	"[DEF]"
+import asyncio
+from pydub import AudioSegment
+from edge_tts import Communicate
 
 # File paths
 input_files = [("Dictionary.tsv", "JapaneseEnglishVocabulary.mp3"),
                ("Dictionary_Focus.tsv", "JapaneseEnglishVocabulary_Focus.mp3")]
+
+# Function for limit rate of speech
+async def generate_tts(text, voice, filename, rate="0%"):
+    communicate = Communicate(text, voice=voice, rate=rate)
+    await communicate.save(filename)
 
 for input_file, output_file in input_files:
     if not os.path.exists(input_file):
@@ -31,21 +34,18 @@ for input_file, output_file in input_files:
     for index, (jp, en) in enumerate(vocab_pairs, start=1):
         print(f"{index}. {jp} = {en}")
 
-        jp_tts1 = gTTS(text=jp + "。", lang='ja', slow=True)
-        en_tts = gTTS(text=en, lang='en')
-        jp_tts2 = gTTS(text=jp + "。", lang='ja', slow=True)
-
         jp1_file = f"jp1_{index}.mp3"
         en_file = f"en_{index}.mp3"
         jp2_file = f"jp2_{index}.mp3"
 
-        jp_tts1.save(jp1_file)
-        en_tts.save(en_file)
-        jp_tts2.save(jp2_file)
+        # Japanese voices slowed down
+        asyncio.run(generate_tts(jp + "。", "ja-JP-KeitaNeural", jp1_file, rate="-25%")) # Slow down Japanese by 25%
+        asyncio.run(generate_tts(en, "en-US-GuyNeural", en_file, rate="+0%"))  # English normal speed
+        asyncio.run(generate_tts(jp + "。", "ja-JP-KeitaNeural", jp2_file, rate="-25%"))
 
-        jp1_audio = AudioSegment.from_mp3(jp1_file)
-        en_audio = AudioSegment.from_mp3(en_file)
-        jp2_audio = AudioSegment.from_mp3(jp2_file)
+        jp1_audio = AudioSegment.from_file(jp1_file)
+        en_audio = AudioSegment.from_file(en_file)
+        jp2_audio = AudioSegment.from_file(jp2_file)
 
         # Audio pauses
         combined += jp1_audio + AudioSegment.silent(duration=500)
@@ -59,4 +59,4 @@ for input_file, output_file in input_files:
 
     # Export the final combined MP3
     combined.export(output_file, format="mp3")
-    print(f"\n Saved: {output_file}")
+    print(f"\nSaved: {output_file}")
